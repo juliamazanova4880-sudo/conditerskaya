@@ -1,4 +1,4 @@
-// unified-system.js - ЕДИНАЯ СИСТЕМА ВСЕХ ФУНКЦИЙ
+// unified-system.js - ЕДИНАЯ СИСТЕМА ВСЕХ ФУНКЦИЙ (ИСПРАВЛЕННАЯ)
 // Объединяет: каталог, авторизация, корзина, админ-панель
 
 // ========== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ==========
@@ -154,273 +154,128 @@ class UnifiedSystem {
   saveDeletedProducts() {
     localStorage.setItem('dolcevita_deleted_products', JSON.stringify(this.deletedProductIds));
   }
+// Отображение каталога — с поддержкой AJAX для базовых товаров
+// ========== СИСТЕМА КАТАЛОГА ==========
+renderCatalog() {
+  const container = document.getElementById('catalog-grid');
+  if (!container) return;
 
- // unified-system.js - ЕДИНАЯ СИСТЕМА ВСЕХ ФУНКЦИЙ (с AJAX для базовых товаров)
-// Объединяет: каталог, авторизация, корзина, админ-панель
-// ========== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ==========
-const SYSTEM_CONFIG = {
-  APP_NAME: 'Dolce Vita',
-  ADMIN_EMAIL: 'admin@dolcevita.com',
-  ADMIN_PASSWORD: 'Admin123!',
-  CURRENCY: '₽'
-};
-// ========== БАЗОВЫЙ КАТАЛОГ ==========
-const DEFAULT_CATALOG = [
-  {
-    id: 1,
-    name: "Муссовый торт",
-    description: "Бисквит 20% | Воздушный мусс 80%",
-    price: 450,
-    image: "images/tort.jpg",
-    category: "торты",
-    available: true,
-    isDefault: true
-  },
-  {
-    id: 2,
-    name: "Чизкейк",
-    description: "Сырный крем 90% | Хрустящая основа 10%",
-    price: 430,
-    image: "images/cheesecake.jpg",
-    category: "торты",
-    available: true,
-    isDefault: true
-  },
-  {
-    id: 3,
-    name: "Эклер",
-    description: "Заварной крем 50% | Сладкое тесто 50%",
-    price: 300,
-    image: "images/eclair.jpg",
-    category: "десерты",
-    available: true,
-    isDefault: true
-  },
-  {
-    id: 4,
-    name: "Тирамису",
-    description: "Крем маскарпоне 80% | Кофейная пропитка 20%",
-    price: 500,
-    image: "images/tiramisu.jpg",
-    category: "десерты",
-    available: true,
-    isDefault: true
-  }
-];
-// ========== ОСНОВНОЙ КЛАСС СИСТЕМЫ ==========
-class UnifiedSystem {
-  constructor() {
-    this.catalog = [];
-    this.users = [];
-    this.currentUser = null;
-    this.cart = [];
-    this.deletedProductIds = [];
-    this.isAdmin = false;
-  }
-  // ========== ИНИЦИАЛИЗАЦИЯ ==========
-  init() {
-    console.log('🚀 Инициализация единой системы...');
-    this.addStyles();
-    this.loadAllData();
-    this.initAuthSystem();
-    this.initCatalogSystem();
-    this.initCartSystem();
-    this.initAdminSystem();
-    this.initEventListeners();
-    console.log('✅ Единая система готова!');
-  }
-  // ========== ЗАГРУЗКА ДАННЫХ ==========
-  loadAllData() {
-    this.loadCatalog();
-    this.loadUsers();
-    this.loadCart();
-    this.loadCurrentUser();
-  }
-  // ========== СИСТЕМА КАТАЛОГА ==========
-  loadCatalog() {
-    try {
-      const deletedSaved = localStorage.getItem('dolcevita_deleted_products');
-      this.deletedProductIds = deletedSaved ? JSON.parse(deletedSaved) : [];
-      const saved = localStorage.getItem('dolcevita_catalog');
-      if (saved) {
-        this.catalog = JSON.parse(saved);
-        this.addMissingDefaultProducts();
-      } else {
-        this.catalog = DEFAULT_CATALOG.filter(product => 
-          !this.deletedProductIds.includes(product.id)
-        );
-        this.saveCatalog();
-      }
-      console.log('📦 Каталог загружен:', this.catalog.length, 'товаров');
-    } catch (e) {
-      console.error('Ошибка загрузки каталога:', e);
-      this.catalog = DEFAULT_CATALOG.filter(product => 
-        !this.deletedProductIds.includes(product.id)
-      );
-      this.saveCatalog();
-    }
-  }
-  addMissingDefaultProducts() {
-    let needsUpdate = false;
-    DEFAULT_CATALOG.forEach(defaultProduct => {
-      if (this.deletedProductIds.includes(defaultProduct.id)) return;
-      const exists = this.catalog.find(p => p.id === defaultProduct.id);
-      if (!exists) {
-        this.catalog.push({ ...defaultProduct });
-        needsUpdate = true;
-      }
-    });
-    if (needsUpdate) this.saveCatalog();
-  }
-  saveCatalog() {
-    localStorage.setItem('dolcevita_catalog', JSON.stringify(this.catalog));
-  }
-  saveDeletedProducts() {
-    localStorage.setItem('dolcevita_deleted_products', JSON.stringify(this.deletedProductIds));
-  }
+  const loading = document.querySelector('.catalog-loading');
+  if (loading) loading.style.display = 'block';
 
-  // ОСНОВНОЙ МЕТОД — С AJAX ДЛЯ ЧИСТЫХ БАЗОВЫХ ТОВАРОВ
-  renderCatalog() {
-    const container = document.getElementById('catalog-grid');
-    if (!container) return;
+  // Проверяем: каталог состоит ТОЛЬКО из 4 базовых товаров и ничего не удалено/добавлено
+  const isPureDefault = 
+    this.catalog.length === 4 &&
+    this.deletedProductIds.length === 0 &&
+    this.catalog.every(p => p.isDefault && 
+      DEFAULT_CATALOG.some(d => d.id === p.id && d.name === p.name));
 
-    const loading = document.querySelector('.catalog-loading');
-    if (loading) loading.style.display = 'block';
-
-    // Проверяем: только 4 базовых, ничего не удалено
-    const isPureDefault = 
-      this.catalog.length === 4 &&
-      this.deletedProductIds.length === 0 &&
-      this.catalog.every(p => p.isDefault);
-
-    if (isPureDefault) {
-      // ЗАГРУЖАЕМ ЧЕРЕЗ AJAX
-      fetch('partials/base-cards.html')
-        .then(response => {
-          if (!response.ok) throw new Error('Файл не найден');
-          return response.text();
-        })
-        .then(html => {
-          container.innerHTML = html;
-          if (loading) loading.style.display = 'none';
-          this.initCatalogButtons(); // 🔥 КРИТИЧЕСКИ ВАЖНО
-          setTimeout(() => this.alignCardsHeight(), 100);
-        })
-        .catch(err => {
-          console.warn('AJAX не сработал, fallback на JS:', err.message);
-          this.renderCatalogJS(container, loading);
-        });
-    } else {
-      // Есть изменения → рендер через JS
-      this.renderCatalogJS(container, loading);
-    }
-  }
-
-  // ВСПОМОГАТЕЛЬНЫЙ МЕТОД — СТАРЫЙ СПОСОБ
-  renderCatalogJS(container, loading) {
-    if (loading) loading.style.display = 'none';
-
-    if (this.catalog.length === 0) {
-      container.innerHTML = `
-        <div class="empty-catalog">
-          <div class="empty-icon">🍰</div>
-          <h3>Каталог пуст</h3>
-          <p>Добавьте товары через панель администратора</p>
-        </div>
-      `;
-      return;
-    }
-
-    let html = '';
-    this.catalog.forEach(product => {
-      html += `
-        <div class="card" data-id="${product.id}" data-category="${product.category}">
-          <img src="${product.image}" alt="${product.name}" 
-               onerror="this.src='images/default-product.jpg'">
-          <div class="card-content">
-            <h3>${product.name}</h3>
-            <p>${product.description}</p>
-            <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
-            ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
-            <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
-              ${product.available ? 'Заказать' : 'Нет в наличии'}
-            </a>
-            ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
-          </div>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-    this.initCatalogButtons();
-    setTimeout(() => this.alignCardsHeight(), 100);
-  }
-
-  initCatalogSystem() {
-    this.renderCatalog();
-    this.initFilters();
-  }
-
-  initFilters() {
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    filterButtons?.forEach(btn => {
-      btn.addEventListener('click', () => {
-        filterButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const filter = btn.dataset.filter;
-        this.filterProducts(filter);
+  if (isPureDefault) {
+    // ЗАГРУЗКА ЧЕРЕЗ AJAX
+    fetch('partials/base-cards.html')
+      .then(response => {
+        if (!response.ok) throw new Error('Файл не найден');
+        return response.text();
+      })
+      .then(html => {
+        container.innerHTML = html;
+        if (loading) loading.style.display = 'none';
+        // 👇 КРИТИЧЕСКИ ВАЖНО: привязываем кнопки "Заказать"
+        this.initCatalogButtons();
+        setTimeout(() => this.alignCardsHeight(), 100);
+      })
+      .catch(err => {
+        console.warn('AJAX fallback:', err.message);
+        // При ошибке — рендер через JS (как раньше)
+        this.renderCatalogJS(container, loading);
       });
-    });
+  } else {
+    // Есть изменения → рендер через JS
+    this.renderCatalogJS(container, loading);
+  }
+}
+
+// Вспомогательный метод: рендер каталога как раньше (через JS)
+renderCatalogJS(container, loading) {
+  if (loading) loading.style.display = 'none';
+
+  if (this.catalog.length === 0) {
+    container.innerHTML = `
+      <div class="empty-catalog">
+        <div class="empty-icon">🍰</div>
+        <h3>Каталог пуст</h3>
+        <p>Добавьте товары через панель администратора</p>
+      </div>
+    `;
+    return;
   }
 
-  filterProducts(filter) {
-    const filtered = filter === 'all' 
-      ? this.catalog 
-      : this.catalog.filter(p => p.category === filter);
-    // Фильтрация ВСЕГДА через JS (AJAX не нужен)
-    this.renderFilteredProductsJS(filtered);
-  }
-
-  renderFilteredProductsJS(products) {
-    const container = document.getElementById('catalog-grid');
-    if (!container) return;
-    if (products.length === 0) {
-      container.innerHTML = `
-        <div class="empty-catalog">
-          <div class="empty-icon">🍰</div>
-          <h3>Товары не найдены</h3>
-          <p>Попробуйте изменить фильтры</p>
+  let html = '';
+  this.catalog.forEach(product => {
+    html += `
+      <div class="card" data-id="${product.id}" data-category="${product.category}">
+        <img src="${product.image}" alt="${product.name}" 
+             onerror="this.src='images/default-product.jpg'">
+        <div class="card-content">
+          <h3>${product.name}</h3>
+          <p>${product.description}</p>
+          <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
+          ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
+          <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
+            ${product.available ? 'Заказать' : 'Нет в наличии'}
+          </a>
+          ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
         </div>
-      `;
-      return;
-    }
-    let html = '';
-    products.forEach(product => {
-      html += `
-        <div class="card" data-id="${product.id}" data-category="${product.category}">
-          <img src="${product.image}" alt="${product.name}" 
-               onerror="this.src='images/default-product.jpg'">
-          <div class="card-content">
-            <h3>${product.name}</h3>
-            <p>${product.description}</p>
-            <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
-            ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
-            <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
-              ${product.available ? 'Заказать' : 'Нет в наличии'}
-            </a>
-            ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
-          </div>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-    this.initCatalogButtons();
-  }
-
-
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+  this.initCatalogButtons();
+  setTimeout(() => this.alignCardsHeight(), 100);
+}
   initCatalogSystem() {
     this.renderCatalog();
     this.initFilters();
   }
+
+
+renderFilteredProductsFallback(products) {
+  const container = document.getElementById('catalog-grid');
+  if (!container) return;
+
+  if (products.length === 0) {
+    container.innerHTML = `
+      <div class="empty-catalog">
+        <div class="empty-icon">🍰</div>
+        <h3>Товары не найдены</h3>
+        <p>Попробуйте изменить фильтры</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  products.forEach(product => {
+    html += `
+      <div class="card" data-id="${product.id}" data-category="${product.category}">
+        <img src="${product.image}" alt="${product.name}" 
+             onerror="this.src='images/default-product.jpg'">
+        <div class="card-content">
+          <h3>${product.name}</h3>
+          <p>${product.description}</p>
+          <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
+          ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
+          <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
+            ${product.available ? 'Заказать' : 'Нет в наличии'}
+          </a>
+          ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
+        </div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+  this.initCatalogButtons();
+}
 
   // Фильтрация товаров
   initFilters() {
@@ -437,13 +292,12 @@ class UnifiedSystem {
     });
   }
 
-  filterProducts(filter) {
-    const filtered = filter === 'all' 
-      ? this.catalog 
-      : this.catalog.filter(p => p.category === filter);
-    
-    this.renderFilteredProducts(filtered);
-  }
+filterProducts(filter) {
+  const filtered = filter === 'all' 
+    ? this.catalog 
+    : this.catalog.filter(p => p.category === filter);
+  this.renderFilteredProductsFallback(filtered); // ВСЕГДА через JS
+}
 
   renderFilteredProducts(products) {
     const container = document.getElementById('catalog-grid');
@@ -1413,68 +1267,33 @@ class UnifiedSystem {
     }
   }
 
-// ====== Vue-реализация уведомлений (минимальная и безопасная) ======
-let toastApp = null;
-let toastComponent = null;
-
-// Инициализируем Vue-приложение ОДИН РАЗ
-function initVueToasts() {
-  if (toastApp) return; // уже инициализировано
-
-  const { createApp, ref, h, TransitionGroup } = Vue;
-
-  // Реактивный список уведомлений
-  const toasts = ref([]);
-
-  // Компонент одного уведомления
-  const ToastItem = {
-    props: ['toast'],
-    setup(props) {
-      return () => h('div', {
-        class: `toast-item toast-${props.toast.type || 'info'}`
-      }, props.toast.message);
-    }
-  };
-
-  // Основной компонент
-  toastComponent = {
-    setup() {
-      return () => h(TransitionGroup, {
-        name: "toast",
-        tag: "div",
-        class: "vue-toasts-container"
-      }, () => toasts.value.map(toast =>
-        h(ToastItem, {
-          key: toast.id,
-          toast: toast
-        })
-      ));
-    }
-  };
-
-  // Создаём приложение
-  toastApp = createApp(toastComponent);
-  toastApp.mount('#vue-toasts');
-
-  // Экспорт функции добавления
-  window.vueAddToast = (message, type = 'info') => {
-    const id = Date.now() + Math.random();
-    toasts.value.push({ id, message, type });
+  showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = 'system-toast';
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${type === 'success' ? '#4CAF50' : 
+                   type === 'error' ? '#ff6b6b' : 
+                   type === 'warning' ? '#ff9800' : '#2196F3'};
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 10002;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-width: 400px;
+    `;
+    
+    document.body.appendChild(toast);
+    
     setTimeout(() => {
-      toasts.value = toasts.value.filter(t => t.id !== id);
+      toast.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
     }, 3000);
-  };
-}
-
-// showToast на Vue.js
-showToast(message, type = 'info') {
-  // Инициализируем Vue при первом вызове
-  if (!window.vueAddToast) {
-    initVueToasts();
   }
-  // Показываем уведомление
-  window.vueAddToast(message, type);
-}
 
   alignCardsHeight() {
     const container = document.getElementById('catalog-grid');
@@ -1500,26 +1319,21 @@ showToast(message, type = 'info') {
   }
 
   // ========== ОБРАБОТЧИКИ СОБЫТИЙ ==========
-  initCatalogButtons() {
-    // Обработка кнопок "Заказать" в каталоге
-    document.addEventListener('click', (e) => {
-      const addToCartBtn = e.target.closest('.add-to-cart');
-      if (!addToCartBtn) return;
-      
-      e.preventDefault();
-      
-      const productId = parseInt(addToCartBtn.dataset.id);
-      const product = this.catalog.find(p => p.id === productId);
-      
-      if (!product || !product.available) {
-        this.showToast('Этот товар временно отсутствует', 'warning');
-        return;
-      }
-      
-      this.addToCart(product);
-      this.animateAddToCart(addToCartBtn, product);
-    });
-  }
+initCatalogButtons() {
+  document.addEventListener('click', (e) => {
+    const addToCartBtn = e.target.closest('.add-to-cart');
+    if (!addToCartBtn) return;
+    e.preventDefault();
+    const productId = parseInt(addToCartBtn.dataset.id);
+    const product = this.catalog.find(p => p.id === productId);
+    if (!product || !product.available) {
+      this.showToast('Этот товар временно отсутствует', 'warning');
+      return;
+    }
+    this.addToCart(product);
+    this.animateAddToCart(addToCartBtn, product);
+  });
+}
 
   initCartButtons() {
     // Открытие корзины
@@ -2125,5 +1939,4 @@ document.addEventListener('DOMContentLoaded', () => {
   window.unifiedSystem.init();
   
   console.log('🚀 Единая система инициализирована!');
-
 });
