@@ -279,81 +279,84 @@ class UnifiedSystem {
     localStorage.setItem('dolcevita_deleted_products', JSON.stringify(this.deletedProductIds));
   }
 
-  // ОСНОВНОЙ МЕТОД — С AJAX ДЛЯ ЧИСТЫХ БАЗОВЫХ ТОВАРОВ
-  renderCatalog() {
-    const container = document.getElementById('catalog-grid');
-    if (!container) return;
+ // Отображение каталога — с полной поддержкой AJAX
+renderCatalog() {
+  const container = document.getElementById('catalog-grid');
+  if (!container) return;
 
-    const loading = document.querySelector('.catalog-loading');
-    if (loading) loading.style.display = 'block';
+  const loading = document.querySelector('.catalog-loading');
+  if (loading) loading.style.display = 'block';
 
-    // Проверяем: только 4 базовых, ничего не удалено
-    const isPureDefault = 
-      this.catalog.length === 4 &&
-      this.deletedProductIds.length === 0 &&
-      this.catalog.every(p => p.isDefault);
+  // Условие: только 4 базовых товара, ничего не удалено, ничего не добавлено
+  const isPureDefault = 
+    this.catalog.length === 4 &&
+    this.deletedProductIds.length === 0 &&
+    this.catalog.every(p => p.isDefault);
 
-    if (isPureDefault) {
-      // ЗАГРУЖАЕМ ЧЕРЕЗ AJAX
-      fetch('base-cards.html')
-        .then(response => {
-          if (!response.ok) throw new Error('Файл не найден');
-          return response.text();
-        })
-        .then(html => {
-          container.innerHTML = html;
-          if (loading) loading.style.display = 'none';
-          this.initCatalogButtons(); // 🔥 КРИТИЧЕСКИ ВАЖНО
-          setTimeout(() => this.alignCardsHeight(), 100);
-        })
-        .catch(err => {
-          console.warn('AJAX не сработал, fallback на JS:', err.message);
-          this.renderCatalogJS(container, loading);
-        });
-    } else {
-      // Есть изменения → рендер через JS
-      this.renderCatalogJS(container, loading);
-    }
+  if (isPureDefault) {
+    // Пытаемся загрузить через AJAX
+    fetch('partials/base-cards.html')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.text();
+      })
+      .then(html => {
+        container.innerHTML = html;
+        if (loading) loading.style.display = 'none';
+        this.initCatalogButtons(); // ОБЯЗАТЕЛЬНО — чтобы работала корзина
+        setTimeout(() => this.alignCardsHeight(), 100);
+      })
+      .catch(error => {
+        console.error('❌ Ошибка AJAX-загрузки:', error);
+        // Fallback на обычный рендер
+        this.renderCatalogFallback(container, loading);
+      });
+  } else {
+    // Есть изменения → рендер через JS
+    this.renderCatalogFallback(container, loading);
+  }
+}
+
+// Fallback-рендер (как раньше)
+renderCatalogFallback(container, loading) {
+  if (loading) loading.style.display = 'none';
+
+  if (this.catalog.length === 0) {
+    container.innerHTML = `
+      <div class="empty-catalog">
+        <div class="empty-icon">🍰</div>
+        <h3>Каталог пуст</h3>
+        <p>Добавьте товары через панель администратора</p>
+      </div>
+    `;
+    return;
   }
 
-  // ВСПОМОГАТЕЛЬНЫЙ МЕТОД — СТАРЫЙ СПОСОБ
-  renderCatalogJS(container, loading) {
-    if (loading) loading.style.display = 'none';
-
-    if (this.catalog.length === 0) {
-      container.innerHTML = `
-        <div class="empty-catalog">
-          <div class="empty-icon">🍰</div>
-          <h3>Каталог пуст</h3>
-          <p>Добавьте товары через панель администратора</p>
+  let html = '';
+  this.catalog.forEach(product => {
+    html += `
+      <div class="card" data-id="${product.id}" data-category="${product.category}">
+        <img src="${product.image}" alt="${product.name}" 
+             onerror="this.src='images/default-product.jpg'">
+        <div class="card-content">
+          <h3>${product.name}</h3>
+          <p>${product.description}</p>
+          <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
+          ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
+          <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
+            ${product.available ? 'Заказать' : 'Нет в наличии'}
+          </a>
+          ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
         </div>
-      `;
-      return;
-    }
-
-    let html = '';
-    this.catalog.forEach(product => {
-      html += `
-        <div class="card" data-id="${product.id}" data-category="${product.category}">
-          <img src="${product.image}" alt="${product.name}" 
-               onerror="this.src='images/default-product.jpg'">
-          <div class="card-content">
-            <h3>${product.name}</h3>
-            <p>${product.description}</p>
-            <div class="price">${product.price}${SYSTEM_CONFIG.CURRENCY}</div>
-            ${product.isDefault ? '<div class="default-badge">🏷️ Базовый</div>' : ''}
-            <a href="#" class="card-btn add-to-cart" data-id="${product.id}">
-              ${product.available ? 'Заказать' : 'Нет в наличии'}
-            </a>
-            ${!product.available ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
-          </div>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-    this.initCatalogButtons();
-    setTimeout(() => this.alignCardsHeight(), 100);
-  }
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+  this.initCatalogButtons();
+  setTimeout(() => this.alignCardsHeight(), 100);
+}
 
   initCatalogSystem() {
     this.renderCatalog();
@@ -2127,4 +2130,5 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 Единая система инициализирована!');
 
 });
+
 
