@@ -295,7 +295,7 @@ class UnifiedSystem {
 
     if (isPureDefault) {
       // ЗАГРУЖАЕМ ЧЕРЕЗ AJAX
-      fetch('partials/base-cards.html')
+      fetch('base-cards.html')
         .then(response => {
           if (!response.ok) throw new Error('Файл не найден');
           return response.text();
@@ -2127,3 +2127,4 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 Единая система инициализирована!');
 
 });
+
